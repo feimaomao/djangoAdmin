@@ -1,0 +1,228 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls admin_static admin_modify %}
+
+{% block extrahead %}{{ block.super }}
+
+ <style type="text/css">
+      body, html{width: 100%;height: 100%;margin:0;font-family: "Microsoft YaHei";}
+      #allmap{height:500px;width:100%;}
+      #r-result{width:100%; font-size:14px;}
+   </style>
+   <script type="text/javascript" src="http://api.map.baidu.com/api?v=2.0&ak=Iduw9tkYmq95VGP4DzN6rt6SzcxL3reF"></script>
+    <script type="text/javascript" src={% static "js/jquery.min.js" %}></script>
+
+<script type="text/javascript" src="{% url 'admin:jsi18n' %}"></script>
+{{ media }}
+{% endblock %}
+
+
+
+{% block extrastyle %}{{ block.super }}<link rel="stylesheet" type="text/css" href="{% static "admin/css/forms.css" %}" />{% endblock %}
+
+{% block coltype %}colM{% endblock %}
+
+{% block bodyclass %}{{ block.super }} app-{{ opts.app_label }} model-{{ opts.model_name }} change-form{% endblock %}
+
+{% if not is_popup %}
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+<a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+&rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+&rsaquo; {% if has_change_permission %}<a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>{% else %}{{ opts.verbose_name_plural|capfirst }}{% endif %}
+&rsaquo; {% if add %}{% trans 'Add' %} {{ opts.verbose_name }}{% else %}{{ original|truncatewords:"18" }}{% endif %}
+</div>
+{% endblock %}
+{% endif %}
+
+{% block content %}<div id="content-main">
+{% block object-tools %}
+{% if change %}{% if not is_popup %}
+  <ul class="object-tools">
+    {% block object-tools-items %}
+    <li>
+        {% url opts|admin_urlname:'history' original.pk|admin_urlquote as history_url %}
+        <a href="{% add_preserved_filters history_url %}" class="historylink">{% trans "History" %}</a>
+    </li>
+    {% if has_absolute_url %}<li><a href="{{ absolute_url }}" class="viewsitelink">{% trans "View on site" %}</a></li>{% endif %}
+    {% endblock %}
+  </ul>
+{% endif %}{% endif %}
+{% endblock %}
+<!--根据地址判断是否是添加批量添加公司-->
+{% if '/admin/django_admin/department/add/' in request.path %}
+    <a href="/admin/django_admin/department/add/createDepartment/">
+        <button style="height: 30px">批量创建单位</button>
+    </a>
+{% endif %}
+<!--根据地址判断是否是添加批量添加用户-->
+{% if 'admin/django_admin/profileuser/add' in request.path %}
+    <a href="/admin/django_admin/profileuser/add/batchCreateUser">
+        <button style="height: 30px">批量创建用户</button>
+    </a>
+{% endif %}
+<form {% if has_file_field %}enctype="multipart/form-data" {% endif %}action="{{ form_url }}" method="post" id="{{ opts.model_name }}_form" novalidate>{% csrf_token %}{% block form_top %}{% endblock %}
+<div>
+{% if is_popup %}<input type="hidden" name="{{ is_popup_var }}" value="1" />{% endif %}
+{% if to_field %}<input type="hidden" name="{{ to_field_var }}" value="{{ to_field }}" />{% endif %}
+{% if save_on_top %}{% block submit_buttons_top %}{% submit_row %}{% endblock %}{% endif %}
+{% if errors %}
+    <p class="errornote">
+    {% if errors|length == 1 %}{% trans "Please correct the error below." %}{% else %}{% trans "Please correct the errors below." %}{% endif %}
+    </p>
+    {{ adminform.form.non_field_errors }}
+{% endif %}
+
+{% block field_sets %}
+{% for fieldset in adminform %}
+  {% include "admin/includes/fieldset.html" %}
+{% endfor %}
+{% endblock %}
+
+{% block after_field_sets %}{% endblock %}
+
+{% block inline_field_sets %}
+{% for inline_admin_formset in inline_admin_formsets %}
+    {% include inline_admin_formset.opts.template %}
+{% endfor %}
+{% endblock %}
+<!--根据地址判断是否是添加批量地图-->
+    {% if 'admin/django_admin/department' in request.path %}
+    <div id="container"
+            style="
+            margin-bottom: 40px;
+                width: 500px;
+                height: 400px;
+                top: 50px;
+                border: 1px solid gray;
+                overflow:hidden;">
+
+   <div id="allmap"></div>
+   <div id="r-result">
+      经度: <input id="longitude" type="text" style="width:100px; margin-right:10px;" />
+      纬度: <input id="latitude" type="text" style="width:100px; margin-right:10px;" />
+   </div>
+    城市<input id="address" type="text" style="width:100px; margin-right:10px;"  onclick="myFun()"/>
+</div>
+
+        <!--判断上级单位-->
+        <script>
+        $("#id_departclass").attr("onchange","departFind()");
+        $("#id_company").attr("onchange","departFind()");
+    function departFind() {
+        $("#id_departFather").html("");
+        $.ajax({
+            url:"/admin/django_admin/department/departFind/",
+            dataType:"json",
+            data:{"id_company":$("#id_company").val(),"id_departclass":$("#id_departclass").val()},
+            type:"GET",
+            success:function(data){
+                for (x in data){
+                    $("#id_departFather").append("<option value='"+data[x]["value"]+"'>"+data[x]["name"]+"</option>");
+                    }
+            }
+        });
+    }
+        departFind();
+        </script>
+    {% endif %}
+<script type="text/javascript">
+    lng1 = document.getElementById('id_lng').value;
+    lat1 = document.getElementById('id_lat').value;
+    if(lat1 && lng1){
+        var map = new BMap.Map("allmap"); //实例化一个地图对象
+        var point = new BMap.Point(lng1,lat1); //设置地图中心的位置
+    }
+    else{
+        var map = new BMap.Map("allmap"); //实例化一个地图对象
+        var point = new BMap.Point(121.540999,31.300627); //设置地图中心的位置
+    }
+
+    var marker = new BMap.Marker(point);
+    map.addOverlay(marker);
+
+
+    map.centerAndZoom(point,12); //设置地图元素的可视层
+
+    map.enableScrollWheelZoom();    //启用滚轮放大缩小，默认禁用
+    map.enableContinuousZoom();    //启用地图惯性拖拽，默认禁用
+
+    var gc = new BMap.Geocoder();
+    gc.getLocation(point, function (rs) {
+        var addComp = rs.addressComponents;
+        address = addComp.province + addComp.city + addComp.district + addComp.street + addComp.streetNumber;
+        var label = new BMap.Label(address, {offset: new BMap.Size(20, -10)});
+        marker.setLabel(label);
+    });
+
+
+    //点击获取坐标
+    map.addEventListener("click",function(e) {
+        var allOverlay = map.getOverlays();
+        for (var i = 0; i < allOverlay.length; i++) {
+            map.removeOverlay(allOverlay[i]);
+        }
+        //存储经纬度
+        lng = e.point.lng;
+        lat = e.point.lat;
+        //在地图上面描点
+        var marker = new BMap.Marker(new BMap.Point(lng, lat));  // 创建标注
+        map.addOverlay(marker);
+        marker.enableDragging();    //可拖拽
+        var gc = new BMap.Geocoder();
+        //获取地址的数据地址
+        var pt = e.point;
+        gc.getLocation(pt, function (rs) {
+            var addComp = rs.addressComponents;
+            address = addComp.province + addComp.city + addComp.district + addComp.street + addComp.streetNumber;
+            document.getElementById('id_address').value = address;
+            document.getElementById('id_lng').value = lng;
+            document.getElementById('id_lat').value = lat;
+            //画图
+            var label = new BMap.Label(address, {offset: new BMap.Size(20, -10)});
+            marker.setLabel(label);
+        });
+    });
+</script>
+
+
+
+
+{% block after_related_objects %}{% endblock %}
+
+{% block submit_buttons_bottom %}{% submit_row %}{% endblock %}
+
+{% block admin_change_form_document_ready %}
+    <script type="text/javascript">
+        (function($) {
+            $(document).ready(function() {
+                $('.add-another').click(function(e) {
+                    e.preventDefault();
+                    var event = $.Event('django:add-another-related');
+                    $(this).trigger(event);
+                    if (!event.isDefaultPrevented()) {
+                        showAddAnotherPopup(this);
+                    }
+                });
+                $('.related-lookup').click(function(e) {
+                    e.preventDefault();
+                    var event = $.Event('django:lookup-related');
+                    $(this).trigger(event);
+                    if (!event.isDefaultPrevented()) {
+                        showRelatedObjectLookupPopup(this);
+                    }
+                });
+
+            {% if adminform and add %}
+                $('form#{{ opts.model_name }}_form :input:visible:enabled:first').focus()
+            {% endif %}
+            });
+        })(django.jQuery);
+    </script>
+{% endblock %}
+
+{# JavaScript for prepopulated fields #}
+{% prepopulated_fields_js %}
+
+</div>
+</form></div>
+{% endblock %}

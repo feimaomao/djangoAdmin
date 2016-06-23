@@ -1,0 +1,213 @@
+{% load staticfiles %}
+<html>
+<head>
+<meta http-equiv="content-type" content="text/html;charset=utf8">
+    <script type="text/javascript" src="{% static 'sp/jquery-1.7.2.min.js' %}"></script>
+
+    <script type="text/javascript" src="{% static 'sp/jeditable/jeditable.js' %}"></script>
+    <script type="text/javascript" src="{% static 'sp/htmltable2csv/htmltable2csv.js' %}"></script>
+    <script src="{% static 'sp/tool/template.js' %}" type="text/javascript"></script>
+    <script type="text/javascript" src="{% static 'sp/json/json2.js' %}"></script>
+    <style type="text/css">
+        /* 
+
+	TableCloth	
+	by Alen Grakalic, brought to you by cssglobe.com
+	
+            */
+            
+            /* general styles */
+            
+            table, td{
+                    font:100% Arial, Helvetica, sans-serif; 
+            }
+            table{border-collapse:collapse;margin:1em 0; width:800px;}
+            th, td{text-align:left;padding:.5em;border:1px solid #fff;}
+            th{background:#328aa4  repeat-x;color:#fff;}
+            td{background:#e5f1f4;}
+            
+            /* tablecloth styles */
+            
+            tr.even td{background:#e5f1f4;}
+            tr.odd td{background:#f8fbfc;}
+            
+            th.over, tr.even th.over, tr.odd th.over{background:#4a98af;}
+            th.down, tr.even th.down, tr.odd th.down{background:#bce774;}
+            th.selected, tr.even th.selected, tr.odd th.selected{}
+            
+            td.over, tr.even td.over, tr.odd td.over{background:#ecfbd4;}
+            td.down, tr.even td.down, tr.odd td.down{background:#bce774;color:#fff;}
+            td.selected, tr.even td.selected, tr.odd td.selected{background:#bce774;color:#555;}
+            
+            /* use this if you want to apply different styleing to empty table cells*/
+            td.empty, tr.odd td.empty, tr.even td.empty{background:#fff;}    
+    </style>
+
+    <title>批量创建单位</title>
+
+</head>
+<body>
+<script type="text/html" id="spdata_tmpl">
+    <thead>
+        <tr><th>单位代码</th><th>单位名称</th><th>上级单位代码</th><th>单位邮箱</th><th>单位地址</th><th>经度</th><th>纬度</th><th>联系人</th>
+    </thead>
+    <tbody>
+        <% for ( var i = 0; i < spdata.length; i++ ) { %>
+        <tr>
+            <td><%=spdata[i].departCode%></td>
+            <td><%=spdata[i].departName%></td>
+            <td><%=spdata[i].departFather%></td>
+            <td><%=spdata[i].email%></td>
+            <td><%=spdata[i].address%></td>
+            <td><%=spdata[i].lng%></td>
+            <td><%=spdata[i].lat%></td>
+            <td><%=spdata[i].contactor%></td>
+            <% if (spdata[i].tag !='') { %>
+                <td><%=spdata[i].tag%></td>
+            <% } %>
+        </tr>
+        <% } %>
+    </tbody>       
+</script>
+<script>
+    if(typeof(String.prototype.trim) === "undefined")
+        {
+            String.prototype.trim = function(){
+                return String(this).replace(/^\s+|\s+$/g, '');
+            };
+        }
+    
+    spdata = []
+    uploadtag = true          //上传控制标记
+    
+    
+    $(document).ready(function() {
+        var company_list = JSON.parse({{ company_list | safe }});
+        for(var i=0;i<company_list.length;i++){
+            $('#company').append("<option value="+company_list[i].pk+">"+company_list[i].fields.companyName+"</option>")
+        }
+        var departclass_list = JSON.parse({{ departclass_list | safe }});
+        for(var i=0;i<departclass_list.length;i++){
+            $('#departclass').append("<option value="+departclass_list[i].pk+">"+departclass_list[i].fields.name+"</option>")
+        }
+        $("#button__io").bind('click', function(){
+            $("#div_2").trigger('showedit', [{"Id":'y'}])
+        })
+        
+        $("#button__savesp").click(function(){
+            if (uploadtag && spdata.length>0) {
+                $.ajax({
+                    type: "POST",
+                    url: '/admin/django_admin/department/add/uploadDepartment/',
+                    data:{"spdatas":JSON.stringify(spdata), "company_id":document.getElementById('company').value, "departclass_id":document.getElementById('departclass').value},
+                    dataType: "json",
+                    cache:false,
+                    async:false,
+                    //ifModified :false, //实时更新，在ie中设为ture，在ff中设为false。
+                    error:function(data, testStatus){alert("无法上传数据")},
+                    success:function(data){
+                        alert("上传数据完毕")
+                        spdata = data
+                        var x = {}
+                        x.spdata = spdata
+                        $("#div_2").html("<table id='landata_table'>"+tmpl("spdata_tmpl", x )+"</table>")
+                    }
+                })
+            } else {
+                alert("不能上传,请检查数据并重新导入")
+            }
+		    
+		    
+		})
+        
+         $('#div_2').editable(function(data){
+                spdata = csv2json(data.trim(), 't')
+                var x = {}
+                x.spdata = spdata	  
+                 
+                
+                return "<table id='landata_table'>"+tmpl("spdata_tmpl", x )+"</table>"		  
+            
+            }, { 
+             type      : 'textarea',
+             indicator : 'import...',
+             tooltip   : 'Click to edit...',
+             data      : function(value, setting){
+                return $(value).table2CSV({separator: '\t',delivery:"value"});
+             },
+             cancel    : 'Cancel',
+             event     : 'showedit',
+             submit    : 'OK'
+         });
+    });
+    
+    
+    csv2json = function(spdatacsv, tt){
+        uploadtag = true
+        var i, list1, list2=[], result = [],tag
+        list1 = spdatacsv.split("\n")
+        list1.splice(0,1)
+        for (i in list1){
+            if (tt == 't') {
+                list2.push(list1[i].split("\t"))
+            }else {
+                list2.push(list1[i].split(","))
+            }
+        }
+        for (i in list2){
+			//console.log("p"+list2[i][5]+"P")
+            tag = []
+            if (list2[i][0] == '' || list2[i][1]=='' || list2[i][2]=='' ||list2[i][3]=='' || list2[i][4]=='' || list2[i][5]=='' || list2[i][6]=='') {
+                tag.push("字段值为空")
+                uploadtag = false
+            }
+{#            if (Number(list2[i][0]) &&Number(list2[i][2]) && Number(list2[i][5]) && Number(list2[i][6])) {#}
+{##}
+{#            } else {#}
+{#                tag.push("单位代码，经度，纬度不是数值")#}
+{#                uploadtag = false#}
+{#            }#}
+            result.push({
+                departCode: list2[i][0].trim(),
+                departName:list2[i][1].trim(),
+                departFather:list2[i][2].trim(),
+                email:list2[i][3].trim(),
+                address:list2[i][4].trim(),
+                lng:list2[i][5].trim(),
+                lat:list2[i][6].trim(),
+                contactor:list2[i][7].trim(),
+                tag:tag.join("__")
+            })
+        }
+
+        return result
+    }
+</script>
+<div id='div_all'>
+    <h1>批量创建单位</h1>
+    <p>
+        <input id="button__savesp" type="button" value="保存">
+        <input id="button__io" type="button" value="导入">
+        <span>
+            用户:
+            <select name="company" id="company">
+            </select>
+        </span>
+        <span>
+            级别：
+            <select name="departclass" id="departclass">
+            </select>
+        </span>
+    </p>
+    <div class="edit_area" id="div_2" style="height:200px;align:left">
+        <table >
+        <tr><th>单位代码</th><th>单位名称</th><th>上级单位代码</th><th>单位邮箱</th><th>单位地址</th><th>经度</th><th>纬度</th><th>联系人</th>
+        
+        </tr>
+        
+        </table>
+    </div>
+</div>
+</body>
+
+
